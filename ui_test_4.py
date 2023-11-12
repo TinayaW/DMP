@@ -1,3 +1,4 @@
+import time
 import streamlit as st
 import folium
 import pickle
@@ -7,7 +8,7 @@ from streamlit_folium import folium_static
 from catboost import CatBoostClassifier
 from sklearn.preprocessing import StandardScaler
 
-# Dummy user credentials (replace with actual authentication logic)
+# Dummy user credentials (replace with actual authentication logic) //CONNECT TO MYSQL LATER
 valid_username = "user1"
 valid_password = "123"
 
@@ -55,7 +56,6 @@ district_coordinates = {
     # Add coordinates for other districts as needed
 }
 
-
 # Sidebar - EDA and Login
 st.sidebar.title("Chicago CrimeWiz")
 st.sidebar.subheader("Exploratory Data Analysis")
@@ -88,6 +88,13 @@ if getattr(st.session_state, 'logged_in', False):
     # Retrieve latitude and longitude for the selected location
     selected_latitude, selected_longitude = district_coordinates[selected_location]
 
+    # Create a NumPy array with the selected features
+    selected_features = np.array([selected_date.year, selected_date.month, selected_date.day,
+                                  selected_date.weekday(), selected_latitude, selected_longitude])
+
+    # Standardize the input using the loaded scaler
+    preprocessed_input = scaler.transform(selected_features.reshape(1, -1))
+
     # Map Section
     st.subheader("Chicago Districts Map")
 
@@ -108,15 +115,18 @@ if getattr(st.session_state, 'logged_in', False):
 
     # Predictions Button
     if st.button("See Predictions"):
-        # Preprocess input data
-        preprocessed_input = np.array([selected_latitude, selected_longitude])
-        preprocessed_input = scaler.transform(preprocessed_input.reshape(1, -1))
 
-        # Make predictions
-        predictions = catboost_model.predict(preprocessed_input)
-
-        # Display the predictions
-        st.write("Predictions for {} in {}: {}".format(selected_date, selected_location, predictions[0]))
+        # Add a loading spinner
+        with st.spinner('Making Predictions...'):
+            # Simulate a delay (you can replace this with the actual prediction logic)
+            time.sleep(1.2)
+            # Make predictions
+            predictions = catboost_model.predict(preprocessed_input)
+            if predictions[0] == 1:
+                # Display the predictions
+                st.write("Predictions for {} in {}: A Violent Crime can happen".format(selected_date, selected_location))
+            else:
+                st.write("Predictions for {} in {}: A Violent Crime may not happen".format(selected_date, selected_location))
 
 else:
     st.warning("Please log in to access predictions and the map.")
