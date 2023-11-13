@@ -211,7 +211,7 @@ if getattr(st.session_state, 'logged_in', False):
         # Create a spinner for loading animation
         with st.spinner("Loading data..."):
             # Fetch the data from the Socrata API
-            results = client.get(socrata_dataset_identifier, where=query, limit=50000)
+            results = client.get(socrata_dataset_identifier, where=query, limit=100000)
 
         # Convert the data to a DataFrame
         df = pd.DataFrame.from_records(results)
@@ -233,9 +233,9 @@ if getattr(st.session_state, 'logged_in', False):
         st.subheader("Crime Map for Selected Time Frame")
         st.map(filtered_df[['latitude', 'longitude']].dropna())
 
-        # # Display the raw data for the selected time frame
-        # st.subheader("Raw Data for Selected Time Frame")
-        # st.write(df)
+        # Display the raw data for the selected time frame
+        st.subheader("Raw Data for Selected Time Frame")
+        st.write(df)
 
         # Display some basic statistics for the selected time frame
         st.subheader("Basic Statistics for Selected Time Frame")
