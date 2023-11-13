@@ -13,8 +13,6 @@ import plotly.express as px
 from catboost import CatBoostClassifier
 from sklearn.preprocessing import StandardScaler
 
-import streamlit as st
-
 st.set_page_config(
     page_title="Chicago CrimeWiz",
     page_icon=":cop:",
