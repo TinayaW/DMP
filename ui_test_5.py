@@ -5,8 +5,21 @@ import pickle
 import numpy as np
 from streamlit.components.v1 import html
 from streamlit_folium import folium_static
+import streamlit as st
+import pandas as pd
+from sodapy import Socrata
+from datetime import datetime, timedelta
+import plotly.express as px
 from catboost import CatBoostClassifier
 from sklearn.preprocessing import StandardScaler
+
+import streamlit as st
+
+st.set_page_config(
+    page_title="Chicago CrimeWiz",
+    page_icon=":cop:",
+)
+
 
 # Dummy user credentials (replace with actual authentication logic) //CONNECT TO MYSQL LATER
 valid_username = "user1"
@@ -57,8 +70,8 @@ district_coordinates = {
 }
 
 # Sidebar - EDA and Login
-st.sidebar.title("Chicago CrimeWiz")
-st.sidebar.subheader("Exploratory Data Analysis")
+st.sidebar.title(":blue[Chicago CrimeWiz] 👮")
+# st.sidebar.subheader("Exploratory Data Analysis")
 
 # Display EDA visualizations and summary here
 
@@ -80,12 +93,14 @@ if st.sidebar.button("Login"):
 navigation_option = st.sidebar.selectbox("Select Option", ["Make Predictions", "Data Analysis"])
 
 # Main Section - Predictions and Map
-st.title("Chicago CrimeWiz")
+st.title(":blue[Chicago CrimeWiz] 👮")
+
 
 # Check if the user is logged in before allowing access to predictions and map
 if getattr(st.session_state, 'logged_in', False):
 
     if navigation_option == "Make Predictions":
+        st.subheader("Make Prediction Section")
         # User Inputs
         selected_date = st.date_input("Select Date")
         selected_location = st.selectbox("Select Location", list_of_districts_in_chicago)
@@ -135,7 +150,141 @@ if getattr(st.session_state, 'logged_in', False):
     elif navigation_option == "Data Analysis":
         # Data Analysis logic goes here
         st.subheader("Data Analysis Section")
-        st.write("This is the Data Analysis section.")
+        # st.write("This is the Data Analysis section.")
+
+        # Socrata API endpoint for Chicago crime data
+        socrata_domain = "data.cityofchicago.org"
+        socrata_dataset_identifier = "ijzp-q8t2"
+
+        # Create a Socrata client
+        client = Socrata(socrata_domain, None)
+
+        # Add date and time input options
+        start_date = st.date_input("Start Date", datetime(2022, 1, 1))
+        end_date = st.date_input("End Date", datetime.today())
+
+        # Convert the selected dates to strings
+        start_date_str = start_date.strftime('%Y-%m-%dT%H:%M:%S')
+        end_date_str = end_date.strftime('%Y-%m-%dT%H:%M:%S')
+
+        # Build the query for the Socrata API
+        query = f"date between '{start_date_str}' and '{end_date_str}'"
+
+        # Create a spinner for loading animation
+        with st.spinner("Loading data..."):
+            # Fetch the data from the Socrata API
+            results = client.get(socrata_dataset_identifier, where=query, limit=50000)
+
+        # Convert the data to a DataFrame
+        df = pd.DataFrame.from_records(results)
+
+        # Convert the 'date' column to datetime format
+        df['date'] = pd.to_datetime(df['date'])
+
+        # Convert the 'latitude' and 'longitude' columns to numeric, filtering out non-numeric values
+        df['latitude'] = pd.to_numeric(df['latitude'], errors='coerce')
+        df['longitude'] = pd.to_numeric(df['longitude'], errors='coerce')
+
+        # Extract the day of the week and create a new column
+        df['day_of_week'] = df['date'].dt.day_name()
+
+        # Filter out non-numeric values before calculating the mean
+        filtered_df = df[['latitude', 'longitude']].apply(pd.to_numeric, errors='coerce')
+
+        # Display a map of crime locations for the selected time frame
+        st.subheader("Crime Map for Selected Time Frame")
+        st.map(filtered_df[['latitude', 'longitude']].dropna())
+
+        # # Display the raw data for the selected time frame
+        # st.subheader("Raw Data for Selected Time Frame")
+        # st.write(df)
+
+        # Display some basic statistics for the selected time frame
+        st.subheader("Basic Statistics for Selected Time Frame")
+        st.write(df.describe())
+
+        # Display a bar chart of crime types for the selected time frame
+        st.subheader("Crime Types for Selected Time Frame")
+        crime_counts = df['primary_type'].value_counts()
+        st.bar_chart(crime_counts)
+
+        # Display the top 10 crime locations for the selected time frame
+        st.subheader("Top 10 Crime Locations for Selected Time Frame")
+        top_locations = df['location_description'].value_counts().head(10)
+        # st.write(top_locations)
+
+        # Create a Plotly pie chart for the top 10 crime locations
+        fig_top_locations = px.pie(top_locations, names=top_locations.index, values=top_locations.values,
+                                   title="Top 10 Crime Locations for Selected Time Frame")
+
+        # Display the Plotly pie chart using st.plotly_chart
+        st.plotly_chart(fig_top_locations)
+
+        # Display a bar chart of crime counts per day of the week for the selected time frame
+        st.subheader("Crime Counts per Day of the Week for Selected Time Frame")
+        day_of_week_counts = df['day_of_week'].value_counts()
+        st.bar_chart(day_of_week_counts, color='#ffaa00')
+
+        # Extract the time of the day and create a new column
+        df['time_of_day'] = pd.cut(df['date'].dt.hour,
+                                   bins=[0, 6, 12, 18, 24],
+                                   labels=['Night', 'Morning', 'Afternoon', 'Evening'],
+                                   right=False)
+
+        # Display the crime counts per time of the day with corresponding hours
+        st.subheader("Crime Counts per Time of the Day for Selected Time Frame")
+        time_of_day_counts = df['time_of_day'].value_counts()
+        st.bar_chart(time_of_day_counts, color='#00ffaa')
+
+        # Display the corresponding hours for each time of day
+        time_of_day_hours = {
+            'Night': '0:00 - 5:59',
+            'Morning': '6:00 - 11:59',
+            'Afternoon': '12:00 - 17:59',
+            'Evening': '18:00 - 23:59'
+        }
+
+        for time_of_day, hours in time_of_day_hours.items():
+            st.write(f"{time_of_day}: {hours}")
+
+        # Extract the time of the day and create a new column
+        df['hour_of_day'] = df['date'].dt.hour
+
+        # Display the crime counts per hour of the day
+        st.subheader("Crime Counts per Hour of the Day for Selected Time Frame")
+        hour_of_day_counts = df['hour_of_day'].value_counts().sort_index()
+
+        # Create a line chart using Plotly
+        fig_line_chart = px.line(x=hour_of_day_counts.index, y=hour_of_day_counts.values,
+                                 labels={'x': 'Hour of the Day', 'y': 'Crime Count'},
+                                 title="Crime Counts per Hour of the Day")
+
+        # Display the Plotly line chart using st.plotly_chart
+        st.plotly_chart(fig_line_chart)
+
+        # Create a space before the dropdown
+        st.markdown("&nbsp;")  # Add a non-breaking space using Markdown
+
+        # Create a dropdown to select a day of the week
+        selected_day = st.selectbox("Select a Day of the Week", df['day_of_week'].unique())
+
+        # Filter data for the selected day of the week
+        selected_day_data = df[df['day_of_week'] == selected_day]
+
+        # Display the count for the top 5 crimes for the selected day
+        st.subheader(f"Top 5 Crimes on {selected_day}")
+        top_crimes = selected_day_data['primary_type'].value_counts().head(5)
+        # st.write(top_crimes)
+
+        # Create a Plotly bar chart
+        fig = px.bar(top_crimes, x=top_crimes.index, y=top_crimes.values,
+                     labels={'x': 'Crime Type', 'y': 'Crime Count'},
+                     title=f"Top 5 Crimes on {selected_day}")
+
+        # Display the Plotly bar chart using st.plotly_chart
+        st.plotly_chart(fig)
+
+
 
 else:
     st.warning("Please log in to access predictions and the map.")

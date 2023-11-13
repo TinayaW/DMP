@@ -11,7 +11,7 @@ socrata_dataset_identifier = "ijzp-q8t2"
 # Create a Socrata client
 client = Socrata(socrata_domain, None)
 
-# Add date input options
+# Add date and time input options
 start_date = st.date_input("Start Date", datetime(2022, 1, 1))
 end_date = st.date_input("End Date", datetime.today())
 
@@ -35,6 +35,10 @@ df['date'] = pd.to_datetime(df['date'])
 df['latitude'] = pd.to_numeric(df['latitude'], errors='coerce')
 df['longitude'] = pd.to_numeric(df['longitude'], errors='coerce')
 
+# Create a new column 'time_of_day' based on the hour of the day
+df['hour'] = df['date'].dt.hour
+df['time_of_day'] = pd.cut(df['hour'], bins=[0, 6, 12, 18, 24], labels=['Night', 'Morning', 'Afternoon', 'Evening'], include_lowest=True)
+
 # Display the raw data for the selected time frame
 st.subheader("Raw Data for Selected Time Frame")
 st.write(df)
@@ -55,6 +59,11 @@ df['day_of_week'] = df['date'].dt.day_name()
 st.subheader("Crime Counts per Day of the Week for Selected Time Frame")
 day_of_week_counts = df['day_of_week'].value_counts()
 st.bar_chart(day_of_week_counts)
+
+# Display a bar chart of crime counts per time of day for the selected time frame
+st.subheader("Crime Counts per Time of Day for Selected Time Frame")
+time_of_day_counts = df['time_of_day'].value_counts()
+st.bar_chart(time_of_day_counts)
 
 # Filter out non-numeric values before calculating the mean
 filtered_df = df[['latitude', 'longitude']].apply(pd.to_numeric, errors='coerce')
