@@ -81,6 +81,10 @@ with open('forecaster_model.pkl', 'rb') as forecaster_file:
 with open('multiclass_model_crimetype_test_6.pkl', 'rb') as multiclass_file:
     multiclass_model = pickle.load(multiclass_file)
 
+# Load the Multiclass location classifier
+with open('multiclass_model_location_pred_1.pkl', 'rb') as location_file:
+    location_model = pickle.load(location_file)
+
 # Define a list of districts in Chicago
 list_of_districts_in_chicago = [
     "Central", "Wentworth", "Grand Crossing", "South Chicago", "Calumet",
@@ -508,8 +512,6 @@ if getattr(st.session_state, 'logged_in', False):
         # Generate and display forecast
         forecast_df = generate_forecast(future_dates)
 
-
-
         # Plotting with Plotly
         fig = px.line(forecast_df, x='Date', y='Predicted Crime Rate')
         fig.update_layout(xaxis_title='Month', yaxis_title='Predicted Crime Rates')
@@ -521,7 +523,7 @@ if getattr(st.session_state, 'logged_in', False):
 
         st.subheader(":red[Violent Crime Prediction - Based on Location]")
         # User Inputs
-        selected_date = st.date_input("Select Date", key= '1')
+        selected_date = st.date_input("Select Date", key='1')
         selected_location = st.selectbox("Select Location", list_of_districts_in_chicago)
 
         # Retrieve latitude and longitude for the selected location
@@ -602,7 +604,7 @@ if getattr(st.session_state, 'logged_in', False):
         st.subheader(":blue[Crime Type with Highest Possibility - Based on Beat]")
 
         # User Inputs
-        selected_date_1 = st.date_input("Select Date", key= '2')
+        selected_date_1 = st.date_input("Select Date", key='2')
         selected_time = st.time_input("Select a time")
         # Display the selected time
         # st.write("Selected time:", selected_time)
@@ -662,7 +664,7 @@ if getattr(st.session_state, 'logged_in', False):
         # Reorder columns
         input_df_final = input_df_final[desired_order]
         st.write(f"What type of crime is most likely to happen in Beat {selected_beat} ? ")
-        if st.button("See Predictions", key= '4'):
+        if st.button("See Predictions", key='4'):
             # Add a loading spinner
             with st.spinner('Making Predictions...'):
                 # Simulate a delay (you can replace this with the actual prediction logic)
@@ -684,32 +686,30 @@ if getattr(st.session_state, 'logged_in', False):
                 else:
                     st.write("Unknown Crime Type")
 
+                loc_df = input_df_final
+                loc_df['Primary Type'] = predictions_multiclass
+                # Make predictions
+                predictions_location = location_model.predict(loc_df)
+                # st.write(predictions_location)
+                if predictions_location == 0:
+                    st.write("Location Prediction: :red[APARTMENT]")
+                elif predictions_location == 1:
+                    st.write("Location Prediction: :red[OTHER]")
+                elif predictions_location == 2:
+                    st.write("Location Prediction: :red[RESIDENCE]")
+                elif predictions_location == 3:
+                    st.write("Location Prediction: :red[SIDEWALK]")
+                elif predictions_location == 4:
+                    st.write("Location Prediction: :red[STREET]")
+                else:
+                    st.write("Unknown Location Type")
+
         st.divider()
 
-            # if predictions[0] == 1:
-                #     # Display the predictions
-                #     st.write(
-                #         "Predictions for {} in {}: A Violent Crime can happen".format(selected_date, selected_location))
-                # else:
-                #     st.write("Predictions for {} in {}: A Violent Crime may not happen".format(selected_date,
-                #                                                                                selected_location))
 
-
-
-        # # Retrieve latitude and longitude for the selected location
-        # selected_latitude, selected_longitude = district_coordinates[selected_location]
-        #
-        # # Create a NumPy array with the selected features
-        # selected_features_1 = np.array([selected_date.year, selected_date.month, selected_date.day,
-        #                                 selected_date.weekday(), selected_latitude, selected_longitude,
-        #                                 selected_time.hour, selected_time.minute, selected_time.second, selected_beat])
-
-
-
-
-    elif navigation_option == "Data Analysis":
+    elif navigation_option == "Data Insights":
         # Data Analysis logic goes here
-        st.subheader("Data Analysis Section")
+        st.subheader("Data Insights Section")
         # st.write("This is the Data Analysis section.")
 
         # Socrata API endpoint for Chicago crime data
@@ -847,6 +847,16 @@ if getattr(st.session_state, 'logged_in', False):
 
         # Display the Plotly bar chart using st.plotly_chart
         st.plotly_chart(fig)
+
+        # Display the count for the top 5 crimes for the selected day
+        st.subheader(f"Top 5 Crimes Location on {selected_day}")
+        top_locations_week = selected_day_data['location_description'].value_counts().head(5)
+        # Create a Plotly pie chart for the top 10 crime locations
+        fig_top_locations_week = px.pie(top_locations_week, names=top_locations_week.index,
+                                        values=top_locations_week.values)
+
+        # Display the Plotly pie chart using st.plotly_chart
+        st.plotly_chart(fig_top_locations_week)
 
 else:
     st.warning("Please log in to access Predictions and the Data Analysis.")
