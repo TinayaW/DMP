@@ -9,7 +9,7 @@ from streamlit.components.v1 import html
 from streamlit_folium import folium_static
 import pandas as pd
 from sodapy import Socrata
-from datetime import datetime, timedelta, time
+from datetime import datetime, timedelta
 import plotly.express as px
 import sqlite3
 import hashlib  # For hashing passwords
@@ -76,6 +76,10 @@ with open('scaler.pkl', 'rb') as scaler_file:
 # Load the forecasting model
 with open('forecaster_model.pkl', 'rb') as forecaster_file:
     forecaster_model = pickle.load(forecaster_file)
+
+# Load the Multiclass classifier
+with open('multiclass_model_crimetype_test_2.pkl', 'rb') as multiclass_file:
+    multiclass_model = pickle.load(multiclass_file)
 
 # Define a list of districts in Chicago
 list_of_districts_in_chicago = [
@@ -407,7 +411,7 @@ beat_coordinates = {2222: {'latitude': 41.73008335, 'longitude': -87.65789521},
                     1650: {'latitude': 41.97618213, 'longitude': -87.87642115}}
 
 # Sidebar - EDA and Login
-st.sidebar.title(":blue[Chicago CrimeWiz] 👮")
+st.sidebar.title(":blue[Chicago] :red[CrimeWiz] 👮")
 # st.sidebar.subheader("Exploratory Data Analysis")
 
 # Login and Registration Section in the Sidebar
@@ -453,19 +457,19 @@ elif login_option == "Register":
 navigation_option = st.sidebar.selectbox("Select Option", ["Make Predictions", "Data Analysis"])
 
 # Main Section - Predictions and Map
-st.title(":blue[Chicago CrimeWiz] 👮")
+st.title(":blue[Chicago] :red[CrimeWiz] 👮")
 
 # Check if the user is logged in before allowing access to predictions and map
 if getattr(st.session_state, 'logged_in', False):
 
     if navigation_option == "Make Predictions":
-        st.subheader(" Crime Rate Forecasting Section")
+        st.subheader("Crime Forecaster")
         st.divider()
 
 
         def generate_forecast(future_dates):
             # Create a DataFrame for future dates
-            future_df = pd.DataFrame({'date': future_dates})
+            future_df = pd.DataFrame({'Date': future_dates})
 
             fh_values = len(future_dates)
 
@@ -489,11 +493,12 @@ if getattr(st.session_state, 'logged_in', False):
                 future_predictions.append(prediction)
 
             # Assign the list of predictions to the 'predicted_crime_rate' column
-            future_df['predicted_crime_rate'] = future_predictions
+            future_df['Predicted Crime Rate'] = future_predictions
 
             return future_df
 
 
+        st.subheader(":blue[Crime Rates Forecaster] ")
         # Date Selection
         selected_date = st.date_input('Select a future date:', datetime.now().date() + timedelta(days=30))
 
@@ -503,18 +508,20 @@ if getattr(st.session_state, 'logged_in', False):
         # Generate and display forecast
         forecast_df = generate_forecast(future_dates)
 
-        st.write("### Forecasted Crime Rates:")
-        st.write(forecast_df)
+
 
         # Plotting with Plotly
-        fig = px.line(forecast_df, x='date', y='predicted_crime_rate', title='Crime Rate Forecast')
-        fig.update_layout(xaxis_title='Date', yaxis_title='Predicted Crime Rate')
+        fig = px.line(forecast_df, x='Date', y='Predicted Crime Rate')
+        fig.update_layout(xaxis_title='Month', yaxis_title='Predicted Crime Rates')
         st.plotly_chart(fig)
+
+        st.write("###### Forecasted Crime Rates ")
+        st.write(forecast_df)
         st.divider()
 
-        st.subheader(":red[Make Prediction Section based on map]")
+        st.subheader(":red[Crime Forecaster based on map]")
         # User Inputs
-        selected_date = st.date_input("Select Date")
+        selected_date = st.date_input("Select Date", key= '1')
         selected_location = st.selectbox("Select Location", list_of_districts_in_chicago)
 
         # Retrieve latitude and longitude for the selected location
@@ -545,9 +552,11 @@ if getattr(st.session_state, 'logged_in', False):
         # Display the map
         folium_static(m)
 
+        st.write("Can a Violent Crime happen in {} on {}?".format(selected_location, selected_date))
+
         # Predictions Button
         predictions = []
-        if st.button("See Predictions"):
+        if st.button("See Predictions", key='3'):
             # Add a loading spinner
             with st.spinner('Making Predictions...'):
                 # Simulate a delay (you can replace this with the actual prediction logic)
@@ -572,8 +581,8 @@ if getattr(st.session_state, 'logged_in', False):
             # Display recent predictions
             st.subheader("Recent Predictions")
 
-            prediction_query = "SELECT * FROM predictions"
-            cursor.execute(prediction_query)
+            prediction_query = "SELECT * FROM predictions WHERE username = ?"
+            cursor.execute(prediction_query, (username,))
             prediction_results = cursor.fetchall()
 
             # for prediction in prediction_results:
@@ -590,9 +599,10 @@ if getattr(st.session_state, 'logged_in', False):
             st.table(prediction_table)
         st.divider()
 
-        st.subheader(":blue[Make Prediction Section Based on Beat]")
+        st.subheader(":blue[Crime Forecaster Based on Beat]")
 
         # User Inputs
+        selected_date_1 = st.date_input("Select Date", key= '2')
         selected_time = st.time_input("Select a time")
         # Display the selected time
         # st.write("Selected time:", selected_time)
@@ -608,9 +618,9 @@ if getattr(st.session_state, 'logged_in', False):
 
         # Create a dictionary with user inputs
         user_data = {
-            "Date": selected_date,
+            "Date": selected_date_1,
             "Beat": selected_beat,
-            "time": selected_time,
+            "Time": selected_time,
             "Latitude": latitude,
             "Longitude": longitude,
             # Add other features
@@ -635,11 +645,34 @@ if getattr(st.session_state, 'logged_in', False):
         input_df['Minute'] = selected_time.minute
         input_df['Second'] = selected_time.second
         input_df['Date'] = input_df['Date'].dt.date
-        input_df['Holiday'] = input_df['Date'].isin(holidays.US()).astype(bool)
+        check_date = input_df['Date'].iloc[0]
+        check_holiday = check_date in holidays.US()
+        input_df['Holiday'] = check_holiday
 
         # Display user inputs
         st.write(":green[User Input:]")
         st.write(input_df)
+        columns_to_rem = ['Date', 'Time']
+        input_df_final = input_df.drop(columns_to_rem, axis=1)
+        print(input_df_final.info())
+
+        if st.button("See Predictions", key= '4'):
+            # Add a loading spinner
+            with st.spinner('Making Predictions...'):
+                # Simulate a delay (you can replace this with the actual prediction logic)
+                time.sleep(1.2)
+                # Make predictions
+                predictions_multiclass = multiclass_model.predict(input_df_final)
+                st.write(predictions_multiclass)
+                # if predictions[0] == 1:
+                #     # Display the predictions
+                #     st.write(
+                #         "Predictions for {} in {}: A Violent Crime can happen".format(selected_date, selected_location))
+                # else:
+                #     st.write("Predictions for {} in {}: A Violent Crime may not happen".format(selected_date,
+                #                                                                                selected_location))
+
+
 
         # # Retrieve latitude and longitude for the selected location
         # selected_latitude, selected_longitude = district_coordinates[selected_location]
